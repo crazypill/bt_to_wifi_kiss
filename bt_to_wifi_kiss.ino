@@ -180,6 +180,8 @@ static WiFiClient* s_currentClient = NULL; // we only support one client at the 
 WiFiServer       wifiServer( KISS_PORT );
 Adafruit_SSD1306 display = Adafruit_SSD1306( 128, 32, &Wire );
 
+void printStatusMessage( const char* msg, bool showLogo = false );
+
 
 bool get_name_from_eir( uint8_t* eir, char* bdname, uint8_t* bdname_len ) 
 { 
@@ -318,7 +320,9 @@ void esp_bt_gap_cb( esp_bt_gap_cb_event_t event,  esp_bt_gap_cb_param_t* param )
         { 
             if( param->disc_res.prop[i].type == ESP_BT_GAP_DEV_PROP_COD && (memcmp( s_peer_bd_addr, param->disc_res.bda, ESP_BD_ADDR_LEN )  ==  0)  )  
             { 
-              Serial.println( "Target device found..." );                 
+              Serial.println( "Target device found..." );    
+              printStatusMessage( "Target device found" );
+    
               esp_spp_start_discovery( s_peer_bd_addr ); 
               esp_bt_gap_cancel_discovery();
             } 
@@ -395,10 +399,39 @@ void esp_bt_gap_cb( esp_bt_gap_cb_event_t event,  esp_bt_gap_cb_param_t* param )
 }
 
 
+void printStatusMessage( const char* msg, bool showLogo )
+{
+    display.clearDisplay();
+    if( showLogo )
+      display.drawBitmap( 0, 0, s_folabs_logo, 128, 32, 1 );
+    
+    display.setTextSize( 1 );
+    display.setTextColor( WHITE );
+    display.setCursor( showLogo ? 42 : 0, (32 - 6) / 2 );
+    display.println( msg );
+    display.setCursor( 0, 0 );
+    display.display(); 
+}
+
+
 void setup() 
 {
+    pinMode( BUTTON_A, INPUT_PULLUP );
+    pinMode( BUTTON_B, INPUT_PULLUP );
+    pinMode( BUTTON_C, INPUT_PULLUP );
+
+    // SSD1306_SWITCHCAPVCC = generate display voltage from 3.3V internally
+    display.begin( SSD1306_SWITCHCAPVCC, 0x3C ); // Address 0x3C for 128x32
+  
+    Serial.println( "OLED started" );
+  
+    // Clear the buffer - draw logo and some text for now to test !!@
+    printStatusMessage( "Far Out Labs", true );
+
+    delay( 1500 );
     Serial.begin( 115200 );  
-    Serial.println( "Connecting to WiFi" );
+    
+    printStatusMessage( "Connecting to WiFi" );
 
     WiFi.mode( WIFI_STA );
     WiFi.begin( ssid, password );
@@ -416,6 +449,8 @@ void setup()
     {
       Serial.println( "mDNS responder started..." );
       MDNS.addService( "kiss", "_tcp", KISS_PORT );
+
+      printStatusMessage( "mDNS started" );
     }
 
     wifiServer.begin();
@@ -444,6 +479,7 @@ void setup()
         if ( esp_bluedroid_init() )  
         { 
             Serial.println( "Bluedroid init failed..." ); 
+            printStatusMessage( "Bluedroid failed" );
             return; 
         } 
     }
@@ -453,6 +489,7 @@ void setup()
         if( esp_bluedroid_enable() )  
         { 
             Serial.println( "Bluedroid enable failed..." ); 
+            printStatusMessage( "Bluedroid en failed" );
             return; 
         } 
     }
@@ -480,27 +517,24 @@ void setup()
     esp_bt_gap_set_pin( pin_type,  0, pin_code );
 
     Serial.println( "Bluetooth init complete" );
+    printStatusMessage( "Bluetooth inited" );
 
+    delay( 1200 );
 
-    pinMode( BUTTON_A, INPUT_PULLUP );
-    pinMode( BUTTON_B, INPUT_PULLUP );
-    pinMode( BUTTON_C, INPUT_PULLUP );
-
-    // SSD1306_SWITCHCAPVCC = generate display voltage from 3.3V internally
-    display.begin( SSD1306_SWITCHCAPVCC, 0x3C ); // Address 0x3C for 128x32
-  
-    Serial.println( "OLED started" );
-  
-    // Clear the buffer - draw logo and some text for now to test !!@
     display.clearDisplay();
     display.drawBitmap( 0, 0, s_folabs_logo, 128, 32, 1 );
     
     display.setTextSize( 1 );
     display.setTextColor( WHITE );
-    display.setCursor( 42, (32 - 6) / 2  );
-    display.println( "Far Out Labs" );
-    display.setCursor( 0, 0 );
-    display.display(); // actually display all of the above
+    display.setCursor( 42, (32 - 9) / 2 );
+    display.println( DEVICE_NAME );
+    display.setCursor( 42, (32 - 9) );
+    display.println( WiFi.localIP() );
+    display.display(); 
+
+//    char buffer[128];
+//    sprintf( buffer, "%s\n%s", DEVICE_NAME, WiFi.localIP().toString().c_str() );
+//    printStatusMessage( buffer );
 }
 
 
@@ -511,6 +545,7 @@ void loop()
     if( client )
     {
         Serial.println( "Client connected..." );
+        printStatusMessage( "Client connected" );
         s_currentClient = &client;
         
         while( client.connected() ) 
